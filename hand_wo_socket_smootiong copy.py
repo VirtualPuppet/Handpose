@@ -7,7 +7,6 @@ import csv
 import mediapipe as mp
 import numpy as np
 import struct
-from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import itertools
 
@@ -17,6 +16,7 @@ from collections import deque
 from utils import CvFpsCalc
 from model import KeyPointClassifier
 from model import PointHistoryClassifier
+
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
@@ -37,10 +37,9 @@ fingerList = [firstF,secondF,middleF,ringF,pinkyF]
 Queue = []
 CONF_THRESHOLD = 0.6
 Q_NUM =5
-
+pre_List =[]
 HOST="192.168.0.110" # 192.168.0.11: 기숙사,  192.168.0.40: 연구실
 PORT=8888
-
 successframe = 0 # success한 frame 개수가 몇개인지 판단.
 
 preMatrix = np.empty((12,3))
@@ -52,20 +51,8 @@ keypoint_classifier = KeyPointClassifier()
 
 point_history_classifier = PointHistoryClassifier()
 
-# FPS Measurement ########################################################
-cvFpsCalc = CvFpsCalc(buffer_len=10)
 
-# Coordinate history #################################################################
-history_length = 16
-point_history = deque(maxlen=history_length)
 
-# Finger gesture history ################################################
-finger_gesture_history = deque(maxlen=history_length)
-
-#  ########################################################################
-hand_sign_id = -1
-isStart = False
-direction = -1
 # Read labels ###########################################################
 with open('model/keypoint_classifier/keypoint_classifier_label.csv',
             encoding='utf-8-sig') as f:
@@ -81,25 +68,39 @@ with open(
         row[0] for row in point_history_classifier_labels
     ]
 
+# FPS Measurement ########################################################
+cvFpsCalc = CvFpsCalc(buffer_len=10)
+
+# Coordinate history #################################################################
+history_length = 16
+point_history = deque(maxlen=history_length)
+
+# Finger gesture history ################################################
+finger_gesture_history = deque(maxlen=history_length)
+
+#  ########################################################################
+mode = 0
+
+hand_sign_id = -1
+isStart = False
+
+def reset():
+    isStart = False
+    Queue = []
+    successframe = 0 # success한 frame 개수가 몇개인지 판단.
+    preMatrix = np.empty((12,3))
+    curMatrix = np.empty((12,3))
+    moveMatrix = np.zeros((12,3))
+    confidence = np.zeros((2))
+    point_history = deque(maxlen=history_length)
+    hand_sign_id = -1
+    finger_gesture_history = deque(maxlen=history_length)
 
 def n_vector(list1, list2):
     fvector = list1-list2
     x,y,z = fvector
     norm = (x**2+y**2+z**2)**(1/2)
     return [x/norm, y/norm, z/norm]
-
-# def reset():
-#     hand_sign_id = -1
-#     isStart = False
-#     Queue = []
-#     successframe = 0 # success한 frame 개수가 몇개인지 판단.
-#     preMatrix = np.empty((12,3))
-#     curMatrix = np.empty((12,3))
-#     moveMatrix = np.zeros((12,3))
-#     confidence = np.zeros((2))
-#     point_history = deque(maxlen=history_length)
-
-#     finger_gesture_history = deque(maxlen=history_length)
 
 
 def vector_movement(moveMatrix, successframe, preMatrix, curMatrix):
@@ -139,6 +140,7 @@ def make_numpy(hand_handedness):
         fingerPoint = [hand_handedness[i].x,hand_handedness[i].y,hand_handedness[i].z]
         point.append(fingerPoint)
     return np.array(point)
+
 
 def calc_bounding_rect(image, landmarks):
     image_width, image_height = image.shape[1], image.shape[0]
@@ -447,211 +449,197 @@ def draw_point_history(image, point_history):
     return image
 
 
-with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
-    s.bind((HOST,PORT))
-    print('Socket bind complete')
-    s.listen()
-    print('Socket now listening')
-    conn,addr=s.accept()
-    with conn:
-        print("Accepted a connection request from")
-        print(conn, addr)
-        # data = conn.send(isGesture.encode())
-        # while True:
-        #     conn.send("hi".encode())
-# For webcam input:
-        cap = cv2.VideoCapture(0)
-        with mp_hands.Hands(
-            model_complexity=0,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5) as hands:
-            isFirst = True
-            isStart = True
-            while cap.isOpened():
-                success, image = cap.read()
-                if not success:
-                    print("Ignoring empty camera frame.")
-                    # If loading a video, use 'break' instead of 'continue'.
-                    continue
 
-                # To improve performance, optionally mark the image as not writeable to
-                # pass by reference.
-                image.flags.writeable = False
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                results = hands.process(image)
 
-                # Draw the hand annotations on the image.
-                image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+with mp_hands.Hands(
+    model_complexity=0,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5) as hands:
+    
+    framenum = 0
+    isFirst = True
+    cap = cv2.VideoCapture(0)
+    isStart = True
+    while cap.isOpened():
+        framenum = framenum+1
+        success, image = cap.read()
+        if not success:
+            print("Ignoring empty camera frame.")
+            # If loading a video, use 'break' instead of 'continue'.
+            continue
+
+        # To improve performance, optionally mark the image as not writeable to
+        # pass by reference.
+        image.flags.writeable = False
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = hands.process(image)
+
+        # Draw the hand annotations on the image.
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        gimage = cv.flip(image, 1)
+
+        if (results.multi_hand_landmarks and results.multi_hand_world_landmarks):
+            # print(len(results.multi_handedness))
+            Queue.append([results.multi_handedness, results.multi_hand_landmarks, results.multi_hand_world_landmarks])
+        else:
+            Queue.append(None)
+    
+        if len(Queue) > Q_NUM:
+            q = Queue.pop(0)
+            
+            if(isFirst == True):
+                pre_List.append(q)
+                pre_List.append(q)
+            pre_q = pre_List[0]
+            move = pre_List[1]
+            
+            if(q is None or len(q)==0):
+                for i in Queue:
+                    isFail = False
+                    if(i is not None):
+                        isFail = True
+                        break
+                if(isFail):
+                    q = pre_q
+            if q and pre_q is not None and len(q)!=0:
+                for i, (hand_handedness, hand_landmarks,hand_world_landmarks) in enumerate(zip(q[0],q[1],q[2])):
+                    if len(q[0])==1 and hand_handedness.classification[0].score < CONF_THRESHOLD:
+                        if pre_q is not None and len(list(pre_q))==1:
+                            pre_mlh, pre_hand_landmarks,pre_hand_world_landmarks = pre_q
+                            if pre_mlh.classification[0].score >= CONF_THRESHOLD:
+                                hand_landmarks = pre_hand_landmarks 
+                                hand_world_landmarks = pre_hand_world_landmarks
+
+                    if(hand_handedness.classification[0].label == "Left"):
+
+                        # Bounding box calculation
+                        brect = calc_bounding_rect(gimage, hand_world_landmarks)
+                        # Landmark calculation
+                        landmark_list = calc_landmark_list(gimage, hand_world_landmarks)
+
+                        # Conversion to relative coordinates / normalized coordinates
+                        pre_processed_landmark_list = pre_process_landmark(
+                            landmark_list)
+                        pre_processed_point_history_list = pre_process_point_history(
+                            image, point_history)        
+
+                        # Hand sign classification
+                        hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+
                 
-                if results.multi_hand_world_landmarks:
-                    # print(len(results.multi_handedness))
-                    Queue.append([results.multi_handedness, results.multi_hand_world_landmarks])
-                else:
-                    Queue.append(None)
-                
-                send_data = []
-                
+                        if(hand_sign_id == 0 and isStart == False):
+                            print(hand_sign_id , isStart)
+                            Queue = []
+                            successframe = 0 # success한 frame 개수가 몇개인지 판단.
+                            preMatrix = np.empty((12,3))
+                            curMatrix = np.empty((12,3))
+                            moveMatrix = np.zeros((12,3))
+                            confidence = np.zeros((2))
+                            point_history = deque(maxlen=history_length)
+                            hand_sign_id = -1
+                            finger_gesture_history = deque(maxlen=history_length)
+                            isStart = True
 
-                if len(Queue) > Q_NUM:
-                    q = Queue.pop(0)
-                    if(isFirst == True):
-                        pre_q = q
-                    if q and pre_q is not None and len(q)!=0:
-                        for i, (hand_handedness, hand_landmarks) in enumerate(zip(q[0],q[1])):
-                            if len(q[0])==1 and hand_handedness.classification[0].score < CONF_THRESHOLD:
-                                if pre_q is not None and len(list(pre_q))==1:
-                                    pre_mlh, pre_hand_landmarks = pre_q
-                                    if pre_mlh.classification[0].score >= CONF_THRESHOLD:
-                                        hand_landmarks = pre_hand_landmarks 
+                        if isStart == False:
+                            print(hand_sign_id , isStart)
+                            break
 
-                            if(hand_handedness.classification[0].label == "Left"):
+                        if(hand_sign_id == 1):
+                            isStart = False
+                            break
+                        
+                        print(hand_sign_id , isStart)
+                        if hand_sign_id == 6:  # Point gesture
+                            point_history.append(landmark_list[8])
+                        else:
+                            point_history.append([0, 0])
+                        
+                        if(hand_sign_id == 2):
+                            if(hand_world_landmarks.landmark[0].x - hand_world_landmarks.landmark[8].x > 0 ):
+                                direction = 0
+                            else:
+                                direction = 1
 
-                                # Bounding box calculation
-                                brect = calc_bounding_rect(gimage, hand_landmarks)
-                                # Landmark calculation
-                                landmark_list = calc_landmark_list(gimage, hand_landmarks)
+                            print(direction)
 
-                                # Conversion to relative coordinates / normalized coordinates
-                                pre_processed_landmark_list = pre_process_landmark(
-                                    landmark_list)
-                                pre_processed_point_history_list = pre_process_point_history(
-                                    image, point_history)        
+                        # Finger gesture classification
+                        finger_gesture_id = 0
+                        point_history_len = len(pre_processed_point_history_list)
+                        if point_history_len == (history_length * 2):
+                            finger_gesture_id = point_history_classifier(
+                                pre_processed_point_history_list)
 
-                                # Hand sign classification
-                                hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                        # Calculates the gesture IDs in the latest detection
+                        finger_gesture_history.append(finger_gesture_id)
+                        most_common_fg_id = Counter(
+                            finger_gesture_history).most_common()
 
-                                if(hand_sign_id == 0 and isStart == False):
-                                    print(hand_sign_id , isStart)
-                                    Queue = []
-                                    successframe = 0 # success한 frame 개수가 몇개인지 판단.
-                                    preMatrix = np.empty((12,3))
-                                    curMatrix = np.empty((12,3))
-                                    moveMatrix = np.zeros((12,3))
-                                    confidence = np.zeros((2))
-                                    point_history = deque(maxlen=history_length)
-                                    hand_sign_id = -1
-                                    finger_gesture_history = deque(maxlen=history_length)
-                                    isStart = True
-                                    direction = -1
+                            # Drawing part
+                        gimage = draw_bounding_rect(True, gimage)
+                        gimage = draw_landmarks(gimage, landmark_list)
+                        gimage = draw_info_text(
+                            gimage,
+                            brect,
+                            hand_handedness,
+                            keypoint_classifier_labels[hand_sign_id],
+                            point_history_classifier_labels[most_common_fg_id[0][0]],
+                        )
 
-                                if isStart == False:
-                                    break
+                        
+                        gimage = draw_point_history(gimage, point_history)
+                        cv2.imshow('MediaPipe Hands', cv2.flip(image, 1))
 
-                                if(hand_sign_id == 1):
-                                    isStart = False
-                                    break
+                    if isStart == False:
+                        break
 
-                                print(hand_sign_id)
-                                if hand_sign_id == 6:  # Point gesture
-                                    point_history.append(landmark_list[8])
-                                else:
-                                    point_history.append([0, 0])
+                    if(hand_handedness.classification[0].label == "Right"):
+                        successframe = successframe+1
 
-                                if(hand_sign_id == 2):
-                                    if(hand_landmarks.landmark[0].x - hand_landmarks.landmark[8].x > 0 ):
-                                        direction = 0
-                                    else:
-                                        direction = 1
+                        if successframe == 1 :
+                            preMatrix = make_numpy(hand_world_landmarks.landmark)
+                            continue
+                        curMatrix = make_numpy(hand_world_landmarks.landmark)
+                        if successframe == 2:
+                            moveMatrix  = vector_movement(moveMatrix, successframe-1, preMatrix, curMatrix)
+                            confidence[0] = hand_handedness.classification[0].score 
+                            preMatrix = curMatrix
+                            continue
+                        confidence[1] = hand_handedness.classification[0].score 
 
-                                    print(direction)
+                        calculate_final(moveMatrix,preMatrix,curMatrix,confidence,successframe-1)
+                        preMatrix = curMatrix
+
+                        lefthandvector = n_vector(curMatrix[0],curMatrix[3])
+                        headvector = n_vector(curMatrix[4],curMatrix[7])
+                        righthandvector = n_vector(curMatrix[8],curMatrix[11])
+                        cv2.putText(image, text="righthand "+str(righthandvector), org=(50,50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
+                        cv2.putText(image, text="head "+str(headvector), org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
+                        cv2.putText(image, text="lefthand "+str(lefthandvector), org=(150,150), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
 
 
-                                # Finger gesture classification
-                                finger_gesture_id = 0
-                                point_history_len = len(pre_processed_point_history_list)
-                                if point_history_len == (history_length * 2):
-                                    finger_gesture_id = point_history_classifier(
-                                        pre_processed_point_history_list)
+                    # data = struct.pack('<3f',*righthandvector)
+                    
+                    # print(data.decode("utf-8"))
 
-                                # Calculates the gesture IDs in the latest detection
-                                finger_gesture_history.append(finger_gesture_id)
-                                most_common_fg_id = Counter(
-                                    finger_gesture_history).most_common()
+                    # conn.send(str(righthandvector[0]).encode()+str(righthandvector[1]).encode()+str(righthandvector[2]).encode())
+                    # if not results.multi_hand_world_landmarks:
 
-                                    # Drawing part
-                                gimage = draw_bounding_rect(True, gimage)
-                                gimage = draw_landmarks(gimage, landmark_list)
-                                gimage = draw_info_text(
-                                    gimage,
-                                    brect,
-                                    hand_handedness,
-                                    keypoint_classifier_labels[hand_sign_id],
-                                    point_history_classifier_labels[most_common_fg_id[0][0]],
-                                )
+            # if(framenum>100):
+            #     pre_List[1] = q
+            #     framenum =0
+            pre_List[0] = q
+            pre_List[1] = q
 
-                                gimage = draw_point_history(gimage, point_history)
-                                cv2.imshow('MediaPipe Hands', cv2.flip(image, 1))
+        # Flip the image horizontally for a selfie-view display.
+                    
+        if cv2.waitKey(5) & 0xFF == 27:
+            # df = DataFrame.from_dict(data)
+            # if not os.path.exists('data2.csv'):
+            #     df.to_csv('data2.csv', index=False, mode='w')
+            # else:
+            # df.to_csv('datapoint.csv', index=False, mode='w', header=False)
+            break
+cap.release()
+cv.destroyAllWindows()
 
-                            if isStart == False:
-                                break
-                            
-                            if(hand_handedness.classification[0].label == "Right"):
-
-                                
-                                # lefthandvector = ivector(calVector(fingerList[0][0],fingerList[0][3]))
-                                # headvector = ivector(calVector(fingerList[1][0],fingerList[1][3]))
-                                # bodyvector = isclose(hand_landmarks.landmark[Wr], hand_landmarks.landmark[5])
-                                # righthandvector = ivector(calVector(fingerList[2][0],fingerList[2][3]))
-                                    
-                                successframe = successframe+1
-
-                                if successframe == 1 :
-                                    preMatrix = make_numpy(hand_landmarks.landmark)
-                                    continue
-                                curMatrix = make_numpy(hand_landmarks.landmark)
-                                if successframe == 2:
-                                    moveMatrix  = vector_movement(moveMatrix, successframe-1, preMatrix, curMatrix)
-                                    confidence[0] = hand_handedness.classification[0].score 
-                                    preMatrix = curMatrix
-                                    continue
-                                confidence[1] = hand_handedness.classification[0].score 
-
-                                calculate_final(moveMatrix,preMatrix,curMatrix,confidence,successframe-1)
-                                preMatrix = curMatrix
-
-                                lefthandvector = n_vector(curMatrix[0],curMatrix[3])
-                                headvector = n_vector(curMatrix[4],curMatrix[7])
-                                righthandvector = n_vector(curMatrix[8],curMatrix[11])
-
-                                cv2.putText(image, text="righthand "+str(righthandvector), org=(50,50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                                cv2.putText(image, text="head "+str(headvector), org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                                cv2.putText(image, text="lefthand "+str(lefthandvector), org=(150,150), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                                left = curMatrix[3]
-                                right = curMatrix[11]
-                                middle = curMatrix[7]
-                                left = left.tolist()
-                                right = right.tolist()
-                                middle = middle.tolist()
-                                
-                                send_data.extend(lefthandvector)
-                                send_data.extend(righthandvector)
-                                send_data.extend(headvector)
-                                send_data.extend(hand_sign_id)
-                                send_data.extend(direction)
-
-                                print(send_data)
-
-                            data = struct.pack('<12f',*send_data)
-                            conn.send(data)
-                               
-                            mp_drawing.draw_landmarks(
-                                image,
-                                hand_landmarks,
-                                mp_hands.HAND_CONNECTIONS,
-                                mp_drawing_styles.get_default_hand_landmarks_style(),
-                                mp_drawing_styles.get_default_hand_connections_style())
-                            
-                                
-                            # conn.send(str(righthandvector[0]).encode()+str(righthandvector[1]).encode()+str(righthandvector[2]).encode())
-                            # if not results.multi_hand_world_landmarks:
-                            #     continue
-                            # for hand_world_landmarks in results.multi_hand_world_landmarks:
-                            #     mp_drawing.plot_landmarks(
-                            #         hand_world_landmarks, mp_hands.HAND_CONNECTIONS, azimuth=5)
-                    pre_q = q
-                # Flip the image horizontally for a selfie-view display.
-                cv2.imshow('MediaPipe Hands', cv2.flip(image, 1))
-                if cv2.waitKey(5) & 0xFF == 27:
-                    break
-        cap.release()

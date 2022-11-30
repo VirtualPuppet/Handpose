@@ -64,6 +64,7 @@ finger_gesture_history = deque(maxlen=history_length)
 
 #  ########################################################################
 hand_sign_id = -1
+pre_hand_sign_id = -1
 isStart = False
 direction = -1
 # Read labels ###########################################################
@@ -483,6 +484,7 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                 # Draw the hand annotations on the image.
                 image.flags.writeable = True
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                gimage = cv.flip(image, 1)
                 
                 if results.multi_hand_world_landmarks:
                     # print(len(results.multi_handedness))
@@ -521,6 +523,8 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                 # Hand sign classification
                                 hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
 
+                                if
+
                                 if(hand_sign_id == 0 and isStart == False):
                                     print(hand_sign_id , isStart)
                                     Queue = []
@@ -543,6 +547,12 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                     break
 
                                 print(hand_sign_id)
+
+                                if (hand_sign_id != -1 and hand_sign_id == pre_hand_sign_id):
+                                    hand_sign_id = -1
+
+                                pre_hand_sign_id = hand_sign_id
+
                                 if hand_sign_id == 6:  # Point gesture
                                     point_history.append(landmark_list[8])
                                 else:
@@ -553,6 +563,8 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                         direction = 0
                                     else:
                                         direction = 1
+                                else:
+                                    direction = -1
 
                                     print(direction)
 
@@ -592,9 +604,7 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                 # lefthandvector = ivector(calVector(fingerList[0][0],fingerList[0][3]))
                                 # headvector = ivector(calVector(fingerList[1][0],fingerList[1][3]))
                                 # bodyvector = isclose(hand_landmarks.landmark[Wr], hand_landmarks.landmark[5])
-                                # righthandvector = ivector(calVector(fingerList[2][0],fingerList[2][3]))
-                                    
-                                successframe = successframe+1
+                                # righthandvector = ivector(calVector(fingerList[2][0],fingerList[2][3]))  
 
                                 if successframe == 1 :
                                     preMatrix = make_numpy(hand_landmarks.landmark)
@@ -627,13 +637,13 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                 send_data.extend(lefthandvector)
                                 send_data.extend(righthandvector)
                                 send_data.extend(headvector)
-                                send_data.extend(hand_sign_id)
-                                send_data.extend(direction)
+                                send_data.append(hand_sign_id) #float -1.0/ 
+                                send_data.append(direction) #-1.0/ 
 
                                 print(send_data)
 
-                            data = struct.pack('<12f',*send_data)
-                            conn.send(data)
+                                data = struct.pack('<11f',*send_data)
+                                conn.send(data)
                                
                             mp_drawing.draw_landmarks(
                                 image,

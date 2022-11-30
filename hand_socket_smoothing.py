@@ -523,7 +523,6 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                 # Hand sign classification
                                 hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
 
-                                if
 
                                 if(hand_sign_id == 0 and isStart == False):
                                     print(hand_sign_id , isStart)

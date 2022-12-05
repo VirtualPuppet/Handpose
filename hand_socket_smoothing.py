@@ -547,10 +547,6 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
 
                                 print(hand_sign_id)
 
-                                if (hand_sign_id != -1 and hand_sign_id == pre_hand_sign_id):
-                                    hand_sign_id = -1
-
-                                pre_hand_sign_id = hand_sign_id
 
                                 if hand_sign_id == 6:  # Point gesture
                                     point_history.append(landmark_list[8])

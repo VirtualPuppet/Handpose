@@ -536,8 +536,7 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                     hand_sign_id = -1
                                     finger_gesture_history = deque(maxlen=history_length)
                                     isStart = True
-                                    direction = -1
-
+                                    
                                 if isStart == False:
                                     break
 
@@ -553,15 +552,6 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                 else:
                                     point_history.append([0, 0])
 
-                                if(hand_sign_id == 2):
-                                    if(hand_landmarks.landmark[0].x - hand_landmarks.landmark[8].x > 0 ):
-                                        direction = 0
-                                    else:
-                                        direction = 1
-                                else:
-                                    direction = -1
-
-                                    print(direction)
 
 
                                 # Finger gesture classification
@@ -633,11 +623,11 @@ with (socket.socket(socket.AF_INET,socket.SOCK_STREAM)) as s:
                                 send_data.extend(righthandvector)
                                 send_data.extend(headvector)
                                 send_data.append(hand_sign_id) #float -1.0/ 
-                                send_data.append(direction) #-1.0/ 
+                                # send_data.append(direction) #-1.0/ 
 
                                 print(send_data)
 
-                                data = struct.pack('<11f',*send_data)
+                                data = struct.pack('<10f',*send_data)
                                 conn.send(data)
                                
                             mp_drawing.draw_landmarks(

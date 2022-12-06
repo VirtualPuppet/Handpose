@@ -1,7 +1,6 @@
 import socket
 import sys
 import cv2
-import cv2 as cv
 import mediapipe as mp
 import numpy as np
 import struct
@@ -114,9 +113,8 @@ def isClose(pre_q):
         return 2
 isFirst = True
 cap = cv2.VideoCapture(0)
-# data = {"W0":[],"W1":[],"W2":[],"T0":[],"T1":[],"T2":[],"I0":[],"I1":[],"I2":[],"M0":[],"M1":[],"M2":[],"R0":[],"R1":[],"R2":[],"P0":[],"P1":[],"P2":[],"G0":[],"G1":[],"G2":[]}
-data = {"F0":[],"F1":[],"F2":[],"F3":[],"S0":[],"S1":[],"S2":[],"S3":[],"M0":[],"M1":[],"M2":[],"M3":[]}
-
+data = {"W0":[],"T0":[],"T1":[],"T2":[],"T3":[],"I0":[],"I1":[],"I2":[],"I3":[],"M0":[],"M1":[],"M2":[],"M3":[],"R0":[],"R1":[],"R2":[],"R3":[],"P0":[],"P1":[],"P2":[],"P3":[]}
+fingerName = ["T","I","M","R","P"]
 with mp_hands.Hands(
     model_complexity=0,
     min_detection_confidence=0.5,
@@ -141,7 +139,6 @@ with mp_hands.Hands(
         image.flags.writeable = True
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         
-        
         if (results.multi_hand_landmarks and results.multi_hand_world_landmarks):
             # print(len(results.multi_handedness))
             Queue.append([results.multi_handedness, results.multi_hand_landmarks, results.multi_hand_world_landmarks])
@@ -152,10 +149,7 @@ with mp_hands.Hands(
             q = Queue.pop(0)
             
             if(isFirst == True):
-                pre_List.append(q)
-                pre_List.append(q)
-            pre_q = pre_List[0]
-            move = pre_List[1]
+                pre_q=q
             if(q is None or len(q)==0):
                 for i in Queue:
                     isFail = False
@@ -173,72 +167,68 @@ with mp_hands.Hands(
                                 hand_landmarks = pre_hand_landmarks 
                                 hand_world_landmarks = pre_hand_world_landmarks
                     if(hand_handedness.classification[0].label == "Right"):
+                        
+                        # for i in range(6):
+                        #     pointdata = []
+                        #     if i == 0:
+                        #         point = hand_world_landmarks.landmark[Wr]
+                        #         pointdata.append(point.x)
+                        #         pointdata.append(point.y)
+                        #         pointdata.append(point.z)
+                        #         data["W0"].append(pointdata)
+                        #     else:
+                        #         for j in range(4):
+                                    
+                        #             name = fingerName[i-1]+str(j)
+                        #             point = hand_world_landmarks.landmark[(i-1)*4+j+1]
+                        #             pointdata.append(point.x)
+                        #             pointdata.append(point.y)
+                        #             pointdata.append(point.z)
+                        #             data[name].append(pointdata)
+
                         # righthandvector = ivector(calcurVector(fingerList[0][0],fingerList[0][3]))
                         # headvector = ivector(calcurVector(fingerList[1][0],fingerList[1][3]))
                         # lefthandvector = ivector(calcurVector(fingerList[2][0],fingerList[2][3]))
                         righthandvector = ivector(calcurVector(fingerList[0][3],fingerList[0][0]))
                         headvector = ivector(calcurVector(fingerList[1][3],fingerList[1][0]))
                         lefthandvector = ivector(calcurVector(fingerList[2][3],fingerList[2][0]))
-                        if(isFirst == True or pre_q[1][0].landmark[0] == hand_landmarks.landmark[Wr].z):
-                            locationvector = [0.,0.,0.]
-                            isFirst = False
-                        else:
-                            locationvector = calVector(hand_world_landmarks.landmark[Wr],pre_q[2][0].landmark[0])
-                            # print(pre_q[1][0].landmark[0])
-                            # print(hand_landmarks.landmark[Wr])
-                        # # print(locationvector)
-                        # if(hand_world_landmarks.landmark[Wr].x>move[2][0].landmark[0].x):
-                        #     cv2.putText(image, text="left"+str(locationvector), org=(50,50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # elif(hand_world_landmarks.landmark[Wr].x<move[2][0].landmark[0].x):
-                        #     cv2.putText(image, text="right "+str(locationvector), org=(50,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # else:
-                        #     cv2.putText(image, text="Nor/l "+str(locationvector), org=(50,150), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # print(move[1][0].landmark[0])
+
+                        # print(pre_q[1][0].landmark[0])
                         # print(hand_landmarks.landmark[Wr])
-                        # # cv2.putText(image, text="righthand "+str(righthandvector), org=(50,50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # # cv2.putText(image, text="head "+str(righthandvector), org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # # cv2.putText(image, text="lefthand "+str(righthandvector), org=(150,150), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # isclose = isClose(move)
-                        # if(move==q):
-                        #     cv2.putText(image, text="Stay"+str(locationvector), org=(200,300), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # if(isclose==1):
-                        #     cv2.putText(image, text="Go front"+str(locationvector), org=(200,200), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # elif(isclose==2):
-                        #     cv2.putText(image, text="Stay"+str(locationvector), org=(200,300), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # elif(isclose==0):
-                        #     cv2.putText(image, text="Go back"+str(locationvector[2]), org=(200,250), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
+                        cv2.putText(image, text="righthand "+str(righthandvector), org=(50,50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
+                        cv2.putText(image, text="head "+str(righthandvector), org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
+                        cv2.putText(image, text="lefthand "+str(righthandvector), org=(150,150), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
                         
-                        # if(locationvector[2]>0.1):
-                        #     cv2.putText(image, text="Go front"+str(locationvector), org=(200,200), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # elif(locationvector[2]<=0.1 and locationvector[2]>=-0.1):
-                        #     cv2.putText(image, text="Stay"+str(locationvector), org=(200,200), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        # else:
-                        #     cv2.putText(image, text="Go back"+str(locationvector[2]), org=(200,200), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
-                        i = 1
-                        for key in data:
-                            point = hand_world_landmarks.landmark[i]  
-                            data[key].append(point)
-                            i = i+1
-                        
+                            
                     mp_drawing.draw_landmarks(
                         image,
-                        hand_landmarks,
+                        hand_world_landmarks,
                         mp_hands.HAND_CONNECTIONS,
                         mp_drawing_styles.get_default_hand_landmarks_style(),
                         mp_drawing_styles.get_default_hand_connections_style())
-        
+                    # plt.figure(figsize=(10, 10))
+                    # ax = plt.axes(projection='3d')
+                    # ax.plot3D(
+                    #     xs=[[0.], righthandvector[0]],
+                    #     ys=[[0.], righthandvector[1]],
+                    #     zs=[[0.], righthandvector[2]],
+                    #     color=tuple(v / 255. for v in (0, 0, 0)),
+                    #     linewidth=5)
+                   
                     # data = struct.pack('<3f',*righthandvector)
                     
                     # print(data.decode("utf-8"))
 
                     # conn.send(str(righthandvector[0]).encode()+str(righthandvector[1]).encode()+str(righthandvector[2]).encode())
                     # if not results.multi_hand_world_landmarks:
-
+                    #     continue
+                    # for hand_world_landmarks in results.multi_hand_world_landmarks:
+                    #     mp_drawing.plot_landmarks(
+                    #         hand_world_landmarks, mp_hands.HAND_CONNECTIONS, azimuth=5)
             # if(framenum>100):
             #     pre_List[1] = q
             #     framenum =0
-            pre_List[0] = q
-            pre_List[1] = q
+            pre_q = q
 
         # Flip the image horizontally for a selfie-view display.
         cv2.imshow('MediaPipe Hands', cv2.flip(image, 1))
@@ -247,6 +237,6 @@ with mp_hands.Hands(
             # if not os.path.exists('data2.csv'):
             #     df.to_csv('data2.csv', index=False, mode='w')
             # else:
-            df.to_csv('datapoint.csv', index=False, mode='w', header=False)
+            df.to_csv('data_lefthand_smoothing.csv', index=False, mode='w', header=False)
             break
 cap.release()
